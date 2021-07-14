@@ -1,7 +1,7 @@
 name = "EFDCLGT_LR_Routes"
 uuid = "7c77e40b-13d7-4629-86a2-6a465cc6d5ed"
 authors = ["yiyuezhuo <yiyuezhuo@gmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 EFDCLGT_LR_Files = "52cbd3d6-767d-4c35-a6ca-8d7d1225d4b0"
