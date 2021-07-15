@@ -6,9 +6,9 @@ struct Hub
     _parent::Union{Nothing, Hub}
     _next_runner_vec::Vector{Collector{Restarter}}
     
-    qser_vec::Vector{Dict{Tuple{String, Int}, TimeArray}}
-    cumu_struct_vec::Vector{TimeArray}
-    WQWCTS_vec::Vector{Dict{Tuple{Int, Int, Int}, TimeArray}}
+    qser_vec::Vector{Dict{Tuple{String, Int}, DateDataFrame}}
+    cumu_struct_vec::Vector{DateDataFrame}
+    WQWCTS_vec::Vector{Dict{Tuple{Int, Int, Int}, DateDataFrame}}
 end
 
 function Hub(collector_vec::Vector{<:Collector}, encoding_vec::Vector{FrozenEncoding}, parent=nothing)
@@ -18,8 +18,8 @@ function Hub(collector_vec::Vector{<:Collector}, encoding_vec::Vector{FrozenEnco
     qser_f_vec = getindex.(replacer_vec, qser_inp)
 
     qser_vec = align.(template_vec, qser_f_vec)
-    cumu_struct_vec = TimeArray[]
-    WQWCTS_vec = Dict{Tuple{Int, Int, Int}, TimeArray}[]
+    cumu_struct_vec = DateDataFrame[]
+    WQWCTS_vec = Dict{Tuple{Int, Int, Int}, DateDataFrame}[]
 
     return Hub(collector_vec, encoding_vec, 
                 parent, Restarter[], 
@@ -69,7 +69,6 @@ function Base.show(io::IO, hub::Hub)
         "$cumu_struct_str$WQWCTS_str first_collector->$(first(hub._collector_vec)))")
 end
 
-# struct TimeArrayCollection
 
 function run_simulation!(hub::Hub)
     template_vec = get_template.(hub._collector_vec)

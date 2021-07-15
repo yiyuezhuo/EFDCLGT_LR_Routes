@@ -5,6 +5,12 @@ struct Natural <: Direction end
 struct Redirect <: Direction end
 struct Limit <: Direction end
 
+name(::Natural) = "Natural"
+name(::Redirect) = "Redirect"
+name(::Limit) = "Limit"
+
+Base.broadcastable(direction::Direction) = Ref(direction) 
+
 abstract type AbstractRoute end;
 
 struct Inflow <: AbstractRoute
@@ -29,6 +35,11 @@ struct Pump <: AbstractRoute
     value::Float64
 end
 
+name(r::Inflow) = "Inflow $(r.src)"
+name(r::Ditch) = "Ditch $(r.src)"
+name(r::Overflow) = "Overflow $(r.idx)"
+name(r::Pump) = "Pump $(r.src)->$(r.dst)"
+
 function open!(route::AbstractRoute)
     error("open! is unsupported for $(typeof(route))")
 end
@@ -39,9 +50,9 @@ end
 
 function flow(::Union{Redirect, Limit}, hub::Hub, inflow::Inflow, qser_vec)
     name_idx_vec_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_keys), inflow.src)
-    return map(name_idx_vec_vec) do name_idx_vec
-        ta = reduce(.+, getindex.(qser_vec, name_idx_vec))
-        rename!(ta, colnames(qser_vec[1][name_idx_vec[1]]))
+    return map(zip(qser_vec, name_idx_vec_vec)) do (qser, name_idx_vec)
+        ta = reduce(.+, getindex.([qser], name_idx_vec))
+        # rename!(ta, colnames(qser_vec[1][name_idx_vec[1]]))
         return ta
     end
 end
@@ -57,9 +68,9 @@ end
 function flow(::Natural, hub::Hub, inflow::Inflow)
     fl = flow(Limit(), hub, inflow)
     fr = flow(Redirect(), hub, inflow)
-    cn = colnames(fl[1])
-    @assert cn == colnames(fr[1])
-    return [rename(l .- r, cn) for (l, r) in zip(fl, fr)]
+    # cn = names(fl[1])
+    # @assert cn == names(fr[1])
+    return [l .- r for (l, r) in zip(fl, fr)]
 end
 
 function concentration(hub::Hub, inflow::Inflow)
@@ -76,8 +87,8 @@ function concentration(hub::Hub, ditch::Ditch)
 end
 
 function flow(hub::Hub, overflow::Overflow)
-    key_vec = getindex.(colnames.(hub.cumu_struct_vec), overflow.idx)
-    return getindex.(hub.cumu_struct_vec, key_vec) # TODO: does it copy a column for every access? Maybe is it better to split it into multiple columns in File API.
+    key_vec = getindex.(names.(hub.cumu_struct_vec), overflow.idx)
+    return getindex.(hub.cumu_struct_vec, :, key_vec) # TODO: does it copy a column for every access? Maybe is it better to split it into multiple columns in File API.
 end
 
 function concentration(hub::Hub, overflow::Overflow)
@@ -94,13 +105,3 @@ function concentration(hub::Hub, pump::Pump)
     return [W[ij[1], ij[2], 1] for (W, ij) in zip(hub.WQWCTS_vec, ij_vec)] # TODO: Is it useful to generalize level=1 ? 
 end
 
-
-#=
-Inflow("east_west", "lake", "basin")
-Ditch("east_west_ditch", "basin")
-Overflow(1, "lake")
-Pump("pump_outflow", "lake", 1.5)
-Pump("pump_outflow", "irrigation", 0.6)
-
-
-=#
