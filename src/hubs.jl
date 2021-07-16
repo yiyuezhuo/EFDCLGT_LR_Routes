@@ -22,7 +22,7 @@ function Hub(collector_vec::Vector{<:Collector}, encoding_vec::Vector{FrozenEnco
     WQWCTS_vec = Dict{Tuple{Int, Int, Int}, DateDataFrame}[]
 
     return Hub(collector_vec, encoding_vec, 
-                parent, Restarter[], 
+                parent, Collector{Restarter}[], 
                 qser_vec, cumu_struct_vec, WQWCTS_vec)
 end
 
@@ -103,7 +103,15 @@ function fork(hub::Hub, n::Int)
 end
 
 function fork(hub::Hub)
-    return Hub(copy.(hub._next_runner_vec), hub.encoding_vec, hub)
+    @assert is_over(hub)
+    _next_runner_vec = copy.(hub._next_runner_vec)
+    # _next_runner_vec =  length(hub._next_runner_vec) > 0 ? copy.(hub._next_runner_vec) : Collector{Restarter}[]
+    return Hub(_next_runner_vec, hub.encoding_vec, hub)
+end
+
+function Base.copy(hub::Hub)
+    @assert !is_over(hub) && length(hub._collector_vec) > 0
+    return Hub(copy.(hub._collector_vec), hub.encoding_vec, hub._parent)
 end
 
 function get_qser_ref(hub::Hub)
@@ -118,9 +126,18 @@ function set_sim_length!(hub::Hub, day_or_date::Union{Day, DateTime})
     return set_sim_length!.(get_replacer(hub), day_or_date)
 end
 
-function get_sim_length(::Type, hub::Hub)
-    length_vec = get_sim_length.(get_replacer(hub))
+function get_sim_length(T::Type, hub::Hub)
+    length_vec = get_sim_length.(T, get_replacer(hub))
     @assert all(length_vec[1] .== length_vec[2:end])
     return first(length_vec)
 end
 
+function set_begin_day!(hub::Hub, day_or_date::Union{Day, DateTime})
+    return set_begin_day!.(get_replacer(hub), day_or_date)
+end
+
+function get_begin_day!(T::Type, hub::Hub)
+    return get_begin_day!.(T, get_replacer(hub))
+end
+
+get_sim_range(hub::Hub) = get_sim_range.(get_replacer(hub))

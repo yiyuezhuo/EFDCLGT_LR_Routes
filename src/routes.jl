@@ -35,6 +35,7 @@ end
 
 struct Overflow <: AbstractRoute
     idx::Int
+    src::String
     dst::String
 end
 
@@ -49,16 +50,16 @@ name(r::Ditch) = "Ditch $(r.src)"
 name(r::Overflow) = "Overflow $(r.idx)"
 name(r::Pump) = "Pump $(r.src)->$(r.dst)"
 
-function _get_inflow_ddf_vec_vec(hub::Hub, inflow::Inflow, qser_vec)
+function _get_inflow_ddf_vec_vec(hub::Hub, inflow::Inflow, qser_vec::Vector{Dict{Tuple{String, Int}, DateDataFrame}})
     name_idx_vec_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_keys), inflow.src)
     return map(zip(qser_vec, name_idx_vec_vec)) do (qser, name_idx_vec)
         return getindex.([qser], name_idx_vec)
     end
 end
 
-function flow(::Union{Redirect, Limit}, hub::Hub, inflow::Inflow, qser_vec)
+function flow(::Union{Redirect, Limit}, hub::Hub, inflow::Inflow, qser_vec::Vector{Dict{Tuple{String, Int}, DateDataFrame}})
     return map(_get_inflow_ddf_vec_vec(hub, inflow, qser_vec)) do ddf_vec
-        return reduce(.+, ddf_vec)
+        return reduce(.+, ddf_vec)[!, :flow]
     end
 end
 
@@ -75,7 +76,7 @@ function flow(::Natural, hub::Hub, inflow::Inflow)
     fr = flow(Redirect(), hub, inflow)
     # cn = names(fl[1])
     # @assert cn == names(fr[1])
-    return [l .- r for (l, r) in zip(fl, fr)]
+    return fl ⊖ fr
 end
 
 function concentration(hub::Hub, inflow::Inflow)
@@ -83,7 +84,7 @@ function concentration(hub::Hub, inflow::Inflow)
 end
 
 function flow(hub::Hub, ditch::Ditch)
-    return getindex.(hub.qser_vec, ditch.src, 1) # TODO: other than 1?
+    return getindex.(getindex.(hub.qser_vec, ditch.src, 1), !, :flow) # TODO: other than 1?
 end
 
 function concentration(hub::Hub, ditch::Ditch)
@@ -102,7 +103,7 @@ function concentration(hub::Hub, overflow::Overflow)
 end
 
 function flow(hub::Hub, pump::Pump)
-    return getindex.(hub.qser_vec, pump.src, 1)
+    return getindex.(getindex.(hub.qser_vec, pump.src, 1), !, :flow)
 end
 
 function concentration(hub::Hub, pump::Pump)
@@ -110,3 +111,16 @@ function concentration(hub::Hub, pump::Pump)
     return [W[ij[1], ij[2], 1] for (W, ij) in zip(hub.WQWCTS_vec, ij_vec)] # TODO: Is it useful to generalize level=1 ? 
 end
 
+"""
+f can be some "statistics", such as ROP: `ddf->ddf[!, :ROP]`, `ddf->ddf[!, [:ROP]]`
+or TP: `ddf->ddf[!, :ROP] .+ ddf[!, :LOP] .+ ddf[!, :LDP] .+ ddf[!, :RDP]`
+or PO4, ...
+"""
+function concentration(f::Function, hub::Hub, route::AbstractRoute)
+    return f.(concentration(hub, route))
+end
+
+flow(hub::Hub, route::AbstractRoute, row_idx) = getindex.(flow(hub, route), row_idx)
+flow(T::Direction, hub::Hub, inflow::Inflow, row_idx) = getindex.(flow(T, hub, inflow), row_idx)
+concentration(f::Function, hub::Hub, route::AbstractRoute, row_idx) = getindex.(concentration(f, hub, route), row_idx, :)
+concentration(hub::Hub, route::AbstractRoute, row_idx) = getindex.(concentration(hub, route), row_idx, :)

@@ -40,7 +40,7 @@ function infer_strap(template::AbstractSimulationTemplate, basin::String, natura
 
     C10 = efdc["C10"]
 
-    overflow_vec = [Overflow(i, natural) for i in 1:size(C10, 1)]
+    overflow_vec = [Overflow(i, basin, natural) for i in 1:size(C10, 1)]
 
     strap = Strap(inflow_vec, ditch_vec, overflow_vec, pump_natural_vec, pump_null_vec)
 
