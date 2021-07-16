@@ -9,7 +9,16 @@ name(::Natural) = "Natural"
 name(::Redirect) = "Redirect"
 name(::Limit) = "Limit"
 
-Base.broadcastable(direction::Direction) = Ref(direction) 
+Base.broadcastable(direction::Direction) = Ref(direction)
+
+#=
+struct Position
+    name::String
+end
+
+Base.broadcastable(pos::Position) = Ref(pos)
+name(pos::Position) = pos.name
+=#
 
 abstract type AbstractRoute end;
 
@@ -40,20 +49,16 @@ name(r::Ditch) = "Ditch $(r.src)"
 name(r::Overflow) = "Overflow $(r.idx)"
 name(r::Pump) = "Pump $(r.src)->$(r.dst)"
 
-function open!(route::AbstractRoute)
-    error("open! is unsupported for $(typeof(route))")
-end
-
-function close!(route::AbstractRoute)
-    error("close! is unsupported for $(typeof(route))")
+function _get_inflow_ddf_vec_vec(hub::Hub, inflow::Inflow, qser_vec)
+    name_idx_vec_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_keys), inflow.src)
+    return map(zip(qser_vec, name_idx_vec_vec)) do (qser, name_idx_vec)
+        return getindex.([qser], name_idx_vec)
+    end
 end
 
 function flow(::Union{Redirect, Limit}, hub::Hub, inflow::Inflow, qser_vec)
-    name_idx_vec_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_keys), inflow.src)
-    return map(zip(qser_vec, name_idx_vec_vec)) do (qser, name_idx_vec)
-        ta = reduce(.+, getindex.([qser], name_idx_vec))
-        # rename!(ta, colnames(qser_vec[1][name_idx_vec[1]]))
-        return ta
+    return map(_get_inflow_ddf_vec_vec(hub, inflow, qser_vec)) do ddf_vec
+        return reduce(.+, ddf_vec)
     end
 end
 

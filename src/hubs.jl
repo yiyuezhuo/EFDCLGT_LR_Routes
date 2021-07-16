@@ -55,6 +55,14 @@ function Hub(template_vec::Vector{<:AbstractSimulationTemplate})
     return Hub(replacer_vec)
 end
 
+function get_template(hub::Hub)
+    return get_template.(hub._collector_vec)
+end
+
+function get_replacer(hub::Hub)
+    return get_replacer.(hub._collector_vec)
+end
+
 Base.broadcastable(hub::Hub) = Ref(hub) 
 
 function is_over(hub::Hub)
@@ -69,10 +77,9 @@ function Base.show(io::IO, hub::Hub)
         "$cumu_struct_str$WQWCTS_str first_collector->$(first(hub._collector_vec)))")
 end
 
-
 function run_simulation!(hub::Hub)
-    template_vec = get_template.(hub._collector_vec)
-    qser_f_vec = getindex.(get_replacer.(hub._collector_vec), qser_inp)
+    template_vec = get_template(hub)
+    qser_f_vec = getindex.(get_replacer(hub), qser_inp)
     
     update!.(template_vec, qser_f_vec, hub.qser_vec)
 
@@ -100,18 +107,20 @@ function fork(hub::Hub)
 end
 
 function get_qser_ref(hub::Hub)
-    return getproperty.(get_template.(hub._collector_vec), :qser_ref)
+    return getproperty.(get_template(hub), :qser_ref)
 end
 
 function get_wqpsc_ref(hub::Hub)
-    return getproperty.(get_template.(hub._collector_vec), :wqpsc_ref)
+    return getproperty.(get_template(hub), :wqpsc_ref)
 end
 
 function set_sim_length!(hub::Hub, day_or_date::Union{Day, DateTime})
-    return set_sim_length!.(get_replacer.(hub._collector_vec), day_or_date)
+    return set_sim_length!.(get_replacer(hub), day_or_date)
 end
 
 function get_sim_length(::Type, hub::Hub)
-    return get_sim_length!.(get_replacer.(hub._collector_vec[1]))
+    length_vec = get_sim_length.(get_replacer(hub))
+    @assert all(length_vec[1] .== length_vec[2:end])
+    return first(length_vec)
 end
 
