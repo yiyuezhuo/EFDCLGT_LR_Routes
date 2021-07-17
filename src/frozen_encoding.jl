@@ -5,11 +5,13 @@ struct FrozenEncoding
     flow_name_to_keys::Dict{String, Vector{Tuple{String, Int}}}
     ij_to_overflow_idx::Dict{Tuple{Int, Int}, Int}
     overflow_idx_to_ij::Vector{Tuple{Int, Int}}
+    flow_name_to_qfactor::Dict{String, Float64}
 end
 
 function FrozenEncoding(efdc::efdc_inp, qser::qser_inp, wqpsc::wqpsc_inp)
     ij_to_flow_name = Dict{Tuple{Int, Int}, String}()
     flow_name_to_ij = Dict{String, Tuple{Int, Int}}()
+    flow_name_to_qfactor = Dict{String, Float64}()
 
     flow_keys = unique(map(x->x[1], keys(qser)))
 
@@ -18,6 +20,7 @@ function FrozenEncoding(efdc::efdc_inp, qser::qser_inp, wqpsc::wqpsc_inp)
         ij = (C08_row.IQS, C08_row.JQS)
         ij_to_flow_name[ij] = key
         flow_name_to_ij[key] = ij
+        flow_name_to_qfactor[key] = C08_row.Qfactor
     end
 
     ij_to_overflow_idx = Dict{Tuple{Int, Int}, Int}()
@@ -34,5 +37,5 @@ function FrozenEncoding(efdc::efdc_inp, qser::qser_inp, wqpsc::wqpsc_inp)
         push!(flow_name_to_keys[name_idx[1]], name_idx)
     end
 
-    return FrozenEncoding(ij_to_flow_name, flow_name_to_ij, flow_name_to_keys, ij_to_overflow_idx, overflow_idx_to_ij)
+    return FrozenEncoding(ij_to_flow_name, flow_name_to_ij, flow_name_to_keys, ij_to_overflow_idx, overflow_idx_to_ij, flow_name_to_qfactor)
 end

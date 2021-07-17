@@ -3,27 +3,35 @@ struct Hub
     _collector_vec::Vector{Collector}
     encoding_vec::Vector{FrozenEncoding}
 
-    _parent::Union{Nothing, Hub}
-    _next_runner_vec::Vector{Collector{Restarter}}
-    
     qser_vec::Vector{Dict{Tuple{String, Int}, DateDataFrame}}
+    pump_mux_map_vec::Vector{Dict{Tuple{String, String}, DateDataFrame}} # pump: src => dst => date_dataframe
+    # `pump_mux_map_vec` is a lazy object, the corresponding pairs will be created when `open!`, `close!` is firstly called.
+
+    _parent::Union{Nothing, Hub}
+
+    # Following will alway be detached in `copy` and `fork`
+    _next_runner_vec::Vector{Collector{Restarter}}
     cumu_struct_vec::Vector{DateDataFrame}
     WQWCTS_vec::Vector{Dict{Tuple{Int, Int, Int}, DateDataFrame}}
 end
 
-function Hub(collector_vec::Vector{<:Collector}, encoding_vec::Vector{FrozenEncoding}, parent=nothing)
+function Hub(collector_vec::Vector{<:Collector}, encoding_vec::Vector{FrozenEncoding}, 
+                qser_vec, pump_mux_map_vec, parent=nothing)
+    #=
     replacer_vec = get_replacer.(collector_vec)
     template_vec = get_template.(replacer_vec)
 
     qser_f_vec = getindex.(replacer_vec, qser_inp)
 
     qser_vec = align.(template_vec, qser_f_vec)
+    =#
     cumu_struct_vec = DateDataFrame[]
     WQWCTS_vec = Dict{Tuple{Int, Int, Int}, DateDataFrame}[]
 
     return Hub(collector_vec, encoding_vec, 
-                parent, Collector{Restarter}[], 
-                qser_vec, cumu_struct_vec, WQWCTS_vec)
+                qser_vec, pump_mux_map_vec,
+                parent, 
+                Collector{Restarter}[], cumu_struct_vec, WQWCTS_vec)
 end
 
 function Hub(collector_vec::Vector{<:Collector})
@@ -40,9 +48,12 @@ function Hub(collector_vec::Vector{<:Collector})
         wqpsc_f_vec = getindex.(template_vec, wqpsc_inp)
     end
 
+    qser_vec = align.(template_vec, qser_f_vec)
     encoding_vec = FrozenEncoding.(efdc_f_vec, qser_f_vec, wqpsc_f_vec)
+
+    pump_mux_map_vec = [Dict{Tuple{String, String}, DateDataFrame}() for _ in 1:length(collector_vec)]
     
-    return Hub(collector_vec, encoding_vec)
+    return Hub(collector_vec, encoding_vec, qser_vec, pump_mux_map_vec)
 end
 
 function Hub(runner_vec::Vector{<:Union{Replacer, Restarter}})
@@ -77,10 +88,31 @@ function Base.show(io::IO, hub::Hub)
         "$cumu_struct_str$WQWCTS_str first_collector->$(first(hub._collector_vec)))")
 end
 
+function _update_pump_mux(hub::Hub)
+    # TODO: check pump is zero at beginning?
+    for (qser, pump_mux_map, encoding) in zip(hub.qser_vec, hub.pump_mux_map_vec, hub.encoding_vec)
+        set = Set{String}()
+        for (src_dst, ddf) in pump_mux_map
+            src = src_dst[1]
+            if !(src in set)
+                push!(set, src)
+                for key in encoding.flow_name_to_keys[src]
+                    qser[key] .= 0
+                end
+            end
+            for key in encoding.flow_name_to_keys[src]
+                qser[key] .+= ddf
+            end
+        end
+    end
+end
+
 function run_simulation!(hub::Hub)
     template_vec = get_template(hub)
     qser_f_vec = getindex.(get_replacer(hub), qser_inp)
-    
+
+    _update_pump_mux(hub)
+
     update!.(template_vec, qser_f_vec, hub.qser_vec)
 
     empty!(hub._next_runner_vec)
@@ -106,12 +138,12 @@ function fork(hub::Hub)
     @assert is_over(hub)
     _next_runner_vec = copy.(hub._next_runner_vec)
     # _next_runner_vec =  length(hub._next_runner_vec) > 0 ? copy.(hub._next_runner_vec) : Collector{Restarter}[]
-    return Hub(_next_runner_vec, hub.encoding_vec, hub)
+    return Hub(_next_runner_vec, hub.encoding_vec, deepcopy(hub.qser_vec), deepcopy(hub.pump_mux_map_vec), hub)
 end
 
 function Base.copy(hub::Hub)
     @assert !is_over(hub) && length(hub._collector_vec) > 0
-    return Hub(copy.(hub._collector_vec), hub.encoding_vec, hub._parent)
+    return Hub(copy.(hub._collector_vec), hub.encoding_vec, deepcopy(hub.qser_vec), deepcopy(hub.pump_mux_map_vec), hub._parent)
 end
 
 function get_qser_ref(hub::Hub)

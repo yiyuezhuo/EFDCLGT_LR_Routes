@@ -45,21 +45,41 @@ struct Pump <: AbstractRoute
     value::Float64
 end
 
+const all_route_type_set = Set([Inflow, Ditch, Overflow, Pump])
+
 name(r::Inflow) = "Inflow $(r.src)"
 name(r::Ditch) = "Ditch $(r.src)"
 name(r::Overflow) = "Overflow $(r.idx)"
 name(r::Pump) = "Pump $(r.src)->$(r.dst)"
 
+"""
+This function will return a "view" for hub's qser, so qfactor should not be applied here.
+"""
 function _get_inflow_ddf_vec_vec(hub::Hub, inflow::Inflow, qser_vec::Vector{Dict{Tuple{String, Int}, DateDataFrame}})
     name_idx_vec_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_keys), inflow.src)
+    #=
+    name_idx_vec_vec = [
+        [("inflow1", 1), ("inflow1", 2)], # particle 1
+        [("inflow1", 1), ("inflow1", 2)], # particle 2
+        ...
+    ]
+    =#
     return map(zip(qser_vec, name_idx_vec_vec)) do (qser, name_idx_vec)
         return getindex.([qser], name_idx_vec)
     end
 end
 
 function flow(::Union{Redirect, Limit}, hub::Hub, inflow::Inflow, qser_vec::Vector{Dict{Tuple{String, Int}, DateDataFrame}})
-    return map(_get_inflow_ddf_vec_vec(hub, inflow, qser_vec)) do ddf_vec
-        return reduce(.+, ddf_vec)[!, :flow]
+    qfactor_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_qfactor), inflow.src)
+    #=
+    qfactor_vec = [
+        inflow1_qfactor, # particle 1
+        inflow1_qfactor, # particle 2
+        ...
+    ]
+    =#
+    return map(zip(_get_inflow_ddf_vec_vec(hub, inflow, qser_vec), qfactor_vec)) do (ddf_vec, qfactor)
+        return reduce(.+, ddf_vec)[!, :flow] .* qfactor
     end
 end
 
@@ -84,7 +104,9 @@ function concentration(hub::Hub, inflow::Inflow)
 end
 
 function flow(hub::Hub, ditch::Ditch)
-    return getindex.(getindex.(hub.qser_vec, ditch.src, 1), !, :flow) # TODO: other than 1?
+    qfactor_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_qfactor), ditch.src)
+    ddf_vec = getindex.(getindex.(hub.qser_vec, ditch.src, 1), !, :flow) # TODO: other than 1?
+    return ddf_vec ⊗ qfactor_vec
 end
 
 function concentration(hub::Hub, ditch::Ditch)
@@ -103,7 +125,9 @@ function concentration(hub::Hub, overflow::Overflow)
 end
 
 function flow(hub::Hub, pump::Pump)
-    return getindex.(getindex.(hub.qser_vec, pump.src, 1), !, :flow)
+    qfactor_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_qfactor), pump.src)
+    ddf_vec = getindex.(getindex.(hub.qser_vec, pump.src, 1), !, :flow)
+    return ddf_vec ⊗ qfactor_vec
 end
 
 function concentration(hub::Hub, pump::Pump)
@@ -120,7 +144,10 @@ function concentration(f::Function, hub::Hub, route::AbstractRoute)
     return f.(concentration(hub, route))
 end
 
-flow(hub::Hub, route::AbstractRoute, row_idx) = getindex.(flow(hub, route), row_idx)
-flow(T::Direction, hub::Hub, inflow::Inflow, row_idx) = getindex.(flow(T, hub, inflow), row_idx)
-concentration(f::Function, hub::Hub, route::AbstractRoute, row_idx) = getindex.(concentration(f, hub, route), row_idx, :)
-concentration(hub::Hub, route::AbstractRoute, row_idx) = getindex.(concentration(hub, route), row_idx, :)
+_select_row(ddf_vec::Vector{<:DateDataFrame}, row_idx) = getindex.(ddf_vec, row_idx, :)
+_select_row(ddf_vec::Vector{<:DateDataFrameVecEnd}, row_idx) = getindex.(ddf_vec, row_idx)
+
+flow(hub::Hub, route::AbstractRoute, row_idx) = _select_row(flow(hub, route), row_idx)
+flow(T::Direction, hub::Hub, inflow::Inflow, row_idx) = _select_row(flow(T, hub, inflow), row_idx)
+concentration(f::Function, hub::Hub, route::AbstractRoute, row_idx) = _select_row(concentration(f, hub, route), row_idx)
+concentration(hub::Hub, route::AbstractRoute, row_idx) = _select_row(concentration(hub, route), row_idx)

@@ -15,6 +15,7 @@ using Base: Float64
 using Dates
 
 using DateDataFrames
+using DateDataFrames: DateDataFrameVecEnd
 using EFDCLGT_LR_Files
 import EFDCLGT_LR_Files: name, get_template, get_replacer, set_sim_length!, get_sim_length, set_begin_day!, get_begin_day,
                         get_sim_range
