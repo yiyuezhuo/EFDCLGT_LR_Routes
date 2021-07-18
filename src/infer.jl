@@ -8,7 +8,7 @@ Manually defining Strap is very likely required. Manually defining itself doesn'
 """
 For retension basin, basin="basin", natureal_name="lake", removed_name="irrigation"
 """
-function infer_strap(template::AbstractSimulationTemplate, basin::String, natural::String, null::String,
+function infer_strap(template::AbstractSimulationTemplate, basin::String, natural::String, null::String;
                 pump_natrual_flow = 1.5, pump_null_flow=0.6, ditch_threshold=0.5, pump_threshold=-0.5)
 
     inflow_vec = Inflow[]

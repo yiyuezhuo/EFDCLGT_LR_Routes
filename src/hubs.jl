@@ -130,6 +130,14 @@ function run_simulation!(hub::Hub)
     append!(hub.WQWCTS_vec, WQWCTS_vec)
 end
 
+function run_simulation!(hub_vec::AbstractVector{Hub})
+    # TODO: Add auto restart optimization
+    task_vec = map(hub_vec) do hub
+        return @async run_simulation!(hub)
+    end
+    return fetch.(task_vec)
+end
+
 function fork(hub::Hub, n::Int)
     return [fork(hub) for _ in 1:n]
 end

@@ -6,7 +6,7 @@ export Inflow, Ditch, Overflow, Pump,
         Hub, fork, get_qser_ref, get_wqpsc_ref,
         Strap, loading,
         # It's expected Routes user don't need to using EFDCLGT_LR_Files and EFDCLGT_LR_Routes
-        set_sim_length!, get_sim_length, SimulationTemplate, SubSimulationTemplate,
+        set_sim_length!, get_sim_length, SimulationTemplate, SubSimulationTemplate, get_replacer,
         efdc_inp, qser_inp, wqpsc_inp, wqini,
         run_simulation!, is_over, fork
 

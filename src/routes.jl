@@ -65,7 +65,7 @@ function _get_inflow_ddf_vec_vec(hub::Hub, inflow::Inflow, qser_vec::Vector{Dict
     ]
     =#
     return map(zip(qser_vec, name_idx_vec_vec)) do (qser, name_idx_vec)
-        return getindex.([qser], name_idx_vec)
+        return getindex.(getindex.([qser], name_idx_vec), !, :flow)
     end
 end
 
@@ -79,7 +79,7 @@ function flow(::Union{Redirect, Limit}, hub::Hub, inflow::Inflow, qser_vec::Vect
     ]
     =#
     return map(zip(_get_inflow_ddf_vec_vec(hub, inflow, qser_vec), qfactor_vec)) do (ddf_vec, qfactor)
-        return reduce(.+, ddf_vec)[!, :flow] .* qfactor
+        return reduce(.+, ddf_vec) .* qfactor
     end
 end
 
@@ -115,22 +115,38 @@ function concentration(hub::Hub, ditch::Ditch)
 end
 
 function flow(hub::Hub, overflow::Overflow)
+    @assert is_over(hub)
     key_vec = getindex.(names.(hub.cumu_struct_vec), overflow.idx)
     return getindex.(hub.cumu_struct_vec, :, key_vec) # TODO: does it copy a column for every access? Maybe is it better to split it into multiple columns in File API.
 end
 
 function concentration(hub::Hub, overflow::Overflow)
+    @assert is_over(hub)
     ij_vec = getindex.(getproperty.(hub.encoding_vec, :overflow_idx_to_ij), overflow.idx)
     return [W[ij[1], ij[2], 1] for (W, ij) in zip(hub.WQWCTS_vec, ij_vec)] # TODO: Is it useful to generalize level=1 ?
 end
 
+function _try_get_pump_mux(hub, src, dst)
+    for (pump_max_map, encoding, qser) in zip(hub.pump_mux_map_vec, hub.encoding_vec, hub.qser_vec)
+        if !((src,dst) in keys(pump_max_map))
+            ddf = deepcopy(qser[first(encoding.flow_name_to_keys[src])])
+            ddf .= 0
+            pump_max_map[(src, dst)] = ddf
+        end
+    end
+    return getindex.(getindex.(hub.pump_mux_map_vec, src, dst), !, :flow)
+end
+
 function flow(hub::Hub, pump::Pump)
     qfactor_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_qfactor), pump.src)
-    ddf_vec = getindex.(getindex.(hub.qser_vec, pump.src, 1), !, :flow)
-    return ddf_vec ⊗ qfactor_vec
+    ddf_vec = _try_get_pump_mux(hub, pump.src, pump.dst)
+    # [src_dst in keys(hub.pump_mux_map_vec[i]) ? hub.pump_mux_map_vec[i][src_dst] :  for i=1:n]
+    # ddf_vec = getindex.(getindex.(hub.qser_vec, pump.src, 1), !, :flow)
+    return ddf_vec ⊗ abs.(qfactor_vec)
 end
 
 function concentration(hub::Hub, pump::Pump)
+    @assert is_over(hub)
     ij_vec = getindex.(getproperty.(hub.encoding_vec, :flow_name_to_ij), pump.src)
     return [W[ij[1], ij[2], 1] for (W, ij) in zip(hub.WQWCTS_vec, ij_vec)] # TODO: Is it useful to generalize level=1 ? 
 end

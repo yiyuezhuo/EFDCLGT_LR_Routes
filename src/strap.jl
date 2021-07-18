@@ -27,3 +27,5 @@ function get_dst_vec(strap::Strap)
     end
     return unique(dst_vec)
 end
+
+Base.broadcastable(strap::Strap) = Ref(strap)
