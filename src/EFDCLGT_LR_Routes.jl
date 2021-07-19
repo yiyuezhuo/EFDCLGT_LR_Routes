@@ -5,6 +5,7 @@ export Inflow, Ditch, Overflow, Pump,
         open!, close!, flow, concentration,
         Hub, fork, get_qser_ref, get_wqpsc_ref,
         Strap, loading,
+        NormalBatch, AutoRestartCutScheduler, pure_sheduler,
         # It's expected Routes user don't need to using EFDCLGT_LR_Files and EFDCLGT_LR_Routes
         set_sim_length!, get_sim_length, SimulationTemplate, SubSimulationTemplate, get_replacer,
         efdc_inp, qser_inp, wqpsc_inp, wqini,
@@ -28,6 +29,7 @@ include("routes.jl")
 include("routes_ops.jl")
 include("strap.jl")
 include("loading.jl")
+include("auto_restart_cut_scheduler.jl")
 include("infer.jl")
 
 end # module

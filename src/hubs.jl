@@ -107,7 +107,7 @@ function _update_pump_mux(hub::Hub)
     end
 end
 
-function run_simulation!(hub::Hub)
+function run_simulation!_pre(hub::Hub)
     template_vec = get_template(hub)
     qser_f_vec = getindex.(get_replacer(hub), qser_inp)
 
@@ -116,10 +116,12 @@ function run_simulation!(hub::Hub)
     update!.(template_vec, qser_f_vec, hub.qser_vec)
 
     empty!(hub._next_runner_vec)
-    # TODO: How can we override "constructor.()"?
-    # https://discourse.julialang.org/t/custom-broadcasting-for-constructors/64574
-    # append!(hub._next_runner_vec, Collector{Restarter}.(hub._collector_vec)) # GO!
-    append!(hub._next_runner_vec, Collector{Restarter}(hub._collector_vec)) # ugly hack
+end
+
+function run_simulation!_post(hub::Hub, next_runner_vec)
+    template_vec = get_template(hub)
+
+    append!(hub._next_runner_vec, next_runner_vec) # ugly hack
 
     cumu_struct_vec = align.(template_vec, getindex.(hub._collector_vec, cumu_struct_outflow_out))
     empty!(hub.cumu_struct_vec)
@@ -130,13 +132,13 @@ function run_simulation!(hub::Hub)
     append!(hub.WQWCTS_vec, WQWCTS_vec)
 end
 
-function run_simulation!(hub_vec::AbstractVector{Hub})
-    # TODO: Add auto restart optimization
-    task_vec = map(hub_vec) do hub
-        return @async run_simulation!(hub)
-    end
-    return fetch.(task_vec)
+function run_simulation!(hub::Hub)
+    run_simulation!_pre(hub)
+    next_runner_vec = Collector{Restarter}(hub._collector_vec)
+    run_simulation!_post(hub, next_runner_vec)
+    return nothing
 end
+
 
 function fork(hub::Hub, n::Int)
     return [fork(hub) for _ in 1:n]

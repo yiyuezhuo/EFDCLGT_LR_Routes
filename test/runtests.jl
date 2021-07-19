@@ -132,4 +132,50 @@ strap = infer_strap(template, basin, natural, null)
         @test replacer[qser_inp][inflow2.src, 1][1, :flow] != 0
         @test replacer[qser_inp][pump_null.src, 1][1, :flow] != 0
     end
+
+    @testset "auto_restart_cut_scheduler" begin
+        dummy_data = [
+            [1,1,1],
+            [1,1,2],
+            [1,3,3],
+            [4,4,4]
+        ]
+
+        eq(idx1::Int, idx2::Int, t::Int) = dummy_data[idx1][t] == dummy_data[idx2][t]
+        index_vec = 1:length(dummy_data)
+        turns = length(dummy_data[1])
+
+        work_vec = pure_sheduler(eq, index_vec, turns)
+
+        #=
+        Expected:
+        PureWork(id=1, idx_vec=[4], span_begin=1, span_end=3, prev=0, finished=true)
+        PureWork(id=2, idx_vec=[1, 2, 3], span_begin=1, span_end=1, prev=0, finished=false)
+        PureWork(id=3, idx_vec=[3], span_begin=2, span_end=3, prev=2, finished=true)
+        PureWork(id=4, idx_vec=[1, 2], span_begin=2, span_end=2, prev=2, finished=false)
+        PureWork(id=5, idx_vec=[1], span_begin=3, span_end=3, prev=4, finished=true)
+        PureWork(id=6, idx_vec=[2], span_begin=3, span_end=3, prev=4, finished=true)     
+        =#
+
+        @test length(work_vec) == 6
+        middle_vec = [work for work in work_vec if work.finished == false]
+        @test length(middle_vec) == 2
+
+        pump = strap.pump_natural_vec[1]
+
+        hub_base2 = copy(hub_base)
+        set_sim_length!(hub_base2, Day(3))        
+
+        hub1 = copy(hub_base2)
+        hub2 = copy(hub1)
+        open!(hub2, pump, 49:72)
+        hub3 = copy(hub2)
+        open!(hub3, pump, 25:48)
+        hub4 = copy(hub3)
+        open!(hub4, pump, 1:24)
+
+        hub_vec = [hub1, hub2, hub3, hub4]
+
+        run_simulation!(AutoRestartCutScheduler(), hub_vec)
+    end
 end
