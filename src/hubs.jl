@@ -1,5 +1,7 @@
 
-struct Hub
+abstract type AbstractHub end
+
+struct Hub <: AbstractHub
     _collector_vec::Vector{Collector}
     encoding_vec::Vector{FrozenEncoding}
 
@@ -83,7 +85,7 @@ end
 function Base.show(io::IO, hub::Hub)
     cumu_struct_str = isempty(hub.cumu_struct_vec) ? "" : "cumu_struct_size->$(size(hub.cumu_struct_vec[1])), "
     WQWCTS_str = isempty(hub.WQWCTS_vec) ? "" : "WQWCTS_size->$(size(first(values(hub.WQWCTS_vec[1])))), "
-    print(io, "Hub(particles->$(length(hub._collector_vec)), has_parent->$(isnothing(hub._parent)), " *
+    print(io, "Hub(particles->$(length(hub._collector_vec)), has_parent->$(!isnothing(hub._parent)), " *
         "is_over->$(is_over(hub)), qser_size->$(size(first(values(hub.qser_vec[1]))))," *
         "$cumu_struct_str$WQWCTS_str first_collector->$(first(hub._collector_vec)))")
 end
@@ -136,7 +138,7 @@ function run_simulation!(hub::Hub)
     run_simulation!_pre(hub)
     next_runner_vec = Collector{Restarter}(hub._collector_vec)
     run_simulation!_post(hub, next_runner_vec)
-    return nothing
+    return hub
 end
 
 
@@ -151,21 +153,23 @@ function fork(hub::Hub)
     return Hub(_next_runner_vec, hub.encoding_vec, deepcopy(hub.qser_vec), deepcopy(hub.pump_mux_map_vec), hub)
 end
 
-function Base.copy(hub::Hub)
+function Base.copy(hub::Hub; detach=false)
     @assert !is_over(hub) && length(hub._collector_vec) > 0
-    return Hub(copy.(hub._collector_vec), hub.encoding_vec, deepcopy(hub.qser_vec), deepcopy(hub.pump_mux_map_vec), hub._parent)
+    parent = detach ? nothing : hub._parent
+    return Hub(copy.(hub._collector_vec), hub.encoding_vec, deepcopy(hub.qser_vec), deepcopy(hub.pump_mux_map_vec), parent)
 end
 
-function get_qser_ref(hub::Hub)
+function get_qser_ref(hub::AbstractHub)
     return getproperty.(get_template(hub), :qser_ref)
 end
 
-function get_wqpsc_ref(hub::Hub)
+function get_wqpsc_ref(hub::AbstractHub)
     return getproperty.(get_template(hub), :wqpsc_ref)
 end
 
 function set_sim_length!(hub::Hub, day_or_date::Union{Day, DateTime})
-    return set_sim_length!.(get_replacer(hub), day_or_date)
+    set_sim_length!.(get_replacer(hub), day_or_date)
+    return hub
 end
 
 function get_sim_length(T::Type, hub::Hub)
@@ -175,11 +179,84 @@ function get_sim_length(T::Type, hub::Hub)
 end
 
 function set_begin_day!(hub::Hub, day_or_date::Union{Day, DateTime})
-    return set_begin_day!.(get_replacer(hub), day_or_date)
+    hub = set_begin_day!.(get_replacer(hub), day_or_date)
+    return hub
 end
 
-function get_begin_day!(T::Type, hub::Hub)
-    return get_begin_day!.(T, get_replacer(hub))
+function get_begin_day(T::Type, hub::Hub)
+    day_vec = get_begin_day.(T, get_replacer(hub))
+    @assert all(day_vec[1:1] .== day_vec[2:end])
+    return first(day_vec)
 end
 
-get_sim_range(hub::Hub) = get_sim_range.(get_replacer(hub))
+function get_sim_range(hub::Hub)
+    sr_vec = get_sim_range.(get_replacer(hub))
+    @assert all([sr_vec[1]] .== sr_vec[2:end])
+    return sr_vec[1]
+end
+
+function get_undecided_range(hub::Hub)
+    undecided_vec = get_undecided_range.(get_replacer(hub))
+    @assert all(undecided_vec[1:1] .== undecided_vec[2:end])
+    return undecided_vec[1]
+end
+
+function particles(hub::Hub)
+    return length(hub._collector_vec)
+end
+
+struct HubBacktrackView{ST <: AbstractSimulationTemplate} <: AbstractHub
+    _templates::Vector{ST}
+
+    encoding_vec::Vector{FrozenEncoding}
+    qser_vec::Vector{Dict{Tuple{String, Int}, DateDataFrame}}
+    pump_mux_map_vec::Vector{Dict{Tuple{String, String}, DateDataFrame}}
+    cumu_struct_vec::Vector{DateDataFrame}
+    WQWCTS_vec::Vector{Dict{Tuple{Int, Int, Int}, DateDataFrame}}
+end
+
+function HubBacktrackView(hub_tail::Hub)
+    # TODO: use a specific type for it?
+    hub = hub_tail
+    @assert is_over(hub)
+
+    n = particles(hub)
+    hub_vec = Hub[]
+    while !isnothing(hub)
+        push!(hub_vec, hub)
+        hub = hub._parent
+    end
+    reverse!(hub_vec)
+
+    cumu_struct_vec = deepcopy(hub_vec[1].cumu_struct_vec) # TODO: use proper shallow copy
+    WQWCTS_vec = deepcopy(hub_vec[1].WQWCTS_vec)
+    for hub in hub_vec[2:end]
+        for i in 1:n
+            # TODO: use true "view" style rather than copying and allocating.
+            cumu_struct_vec[i] = vcat(cumu_struct_vec[i], hub.cumu_struct_vec[i])
+            key_vec = collect(keys(WQWCTS_vec[1]))
+            for key in key_vec
+                WQWCTS_vec[i][key] = vcat(WQWCTS_vec[i][key], hub.WQWCTS_vec[i][key])
+            end
+        end
+    end
+
+    return HubBacktrackView(get_template(hub_tail), hub_tail.encoding_vec, hub_tail.qser_vec, hub_tail.pump_mux_map_vec,
+             cumu_struct_vec, WQWCTS_vec)
+end
+
+function get_template(hub::HubBacktrackView)
+    return return hub._templates
+end
+
+is_over(::HubBacktrackView) = true
+
+function Base.show(io::IO, hub::HubBacktrackView)
+    cumu_struct_str = isempty(hub.cumu_struct_vec) ? "" : "cumu_struct_size->$(size(hub.cumu_struct_vec[1])), "
+    WQWCTS_str = isempty(hub.WQWCTS_vec) ? "" : "WQWCTS_size->$(size(first(values(hub.WQWCTS_vec[1])))), "
+    print(io, "HubBacktrackView(particles->$(particles(hub)), " *
+        "qser_size->$(size(first(values(hub.qser_vec[1])))), " *
+        "$cumu_struct_str$WQWCTS_str")
+end
+
+particles(hub::HubBacktrackView) = length(hub.qser_vec)

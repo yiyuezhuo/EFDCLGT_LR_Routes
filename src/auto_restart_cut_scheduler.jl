@@ -183,15 +183,21 @@ function run_simulation!(::AutoRestartCutScheduler, hub_vec::AbstractVector{Hub}
         task_vec = map(work_vec) do work
             return @async begin
                 if work.prev != 0
-                    collector = fetch(task_vec[work.prev])
+                    collector = fetch(task_vec[work.prev]) # TODO: while it will work due to async property, is it better to copy it to prevent potential bug?
                 else
                     collector = copy(collector_vec[work.idx_vec[1]])
                 end
                 # @show collector 
                 # @show get_replacer(collector)
+                replacer = get_replacer(collector)
+
                 day_length = Day(work.span_end - work.span_begin + 1)
-                set_sim_length!(get_replacer(collector), day_length)
+                set_sim_length!(replacer, day_length)
+
+                replacer[qser_inp] = get_replacer(collector_vec[work.idx_vec[1]])[qser_inp]
+
                 next_collector = Collector{Restarter}(collector)
+
                 for idx in work.idx_vec
                     orig_collector = collector_vec[idx]
                     append!(orig_collector, collector)
@@ -220,4 +226,5 @@ function run_simulation!(::AutoRestartCutScheduler, hub_vec::AbstractVector{Hub}
 end
 
 # TODO: switch default implementation to `AutoRestartCutScheduler`
-run_simulation!(hub_vec::AbstractVector{Hub}) = run_simulation!(NormalBatch(), hub_vec)
+# run_simulation!(hub_vec::AbstractVector{Hub}) = run_simulation!(NormalBatch(), hub_vec)
+run_simulation!(hub_vec::AbstractVector{Hub}) = run_simulation!(AutoRestartCutScheduler(), hub_vec)
