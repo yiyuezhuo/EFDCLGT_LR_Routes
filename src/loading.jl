@@ -42,6 +42,6 @@ function loading(f::Function, ::Type{Dict{String, Float64}}, hub::Hub, strap::St
 end
 
 function loading(f::Function, key::String, hub::Hub, strap::Strap, row_idx=get_sim_range(hub); selected_type_set=all_route_type_set)
-    rd = loading(f, Dict{String, Float64}, hub, strap, row_idx; selected_type_set=all_route_type_set)
+    rd = loading(f, Dict{String, Float64}, hub, strap, row_idx; selected_type_set=selected_type_set)
     return rd[key]
 end

@@ -183,7 +183,7 @@ function run_simulation!(::AutoRestartCutScheduler, hub_vec::AbstractVector{Hub}
         task_vec = map(work_vec) do work
             return @async begin
                 if work.prev != 0
-                    collector = fetch(task_vec[work.prev]) # TODO: while it will work due to async property, is it better to copy it to prevent potential bug?
+                    collector = copy(fetch(task_vec[work.prev])) # TODO: while it will work due to async property, is it better to copy it to prevent potential bug?
                 else
                     collector = copy(collector_vec[work.idx_vec[1]])
                 end
