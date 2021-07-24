@@ -48,7 +48,7 @@ eq(idx1::Int, idx2::Int, t::Int) = dummy_data[idx1][t] == dummy_data[idx2][t]
 index_vec = 1:length(dummy_data)
 turns = length(dummy_data[1])
 
-pure_sheduler(eq, index_vec, turns)
+pure_scheduler(eq, index_vec, turns)
 
 6-element Vector{EFDCLGT_LR_Routes.PureWork}:
  PureWork(id=1, idx_vec=[4], span_begin=1, span_end=3, prev=0, finished=true)
@@ -58,7 +58,7 @@ pure_sheduler(eq, index_vec, turns)
  PureWork(id=5, idx_vec=[1], span_begin=3, span_end=3, prev=4, finished=true)
  PureWork(id=6, idx_vec=[2], span_begin=3, span_end=3, prev=4, finished=true)
 """
-function pure_sheduler(eq::Function, index_vec::AbstractVector{Int}, turns::Int)
+function pure_scheduler(eq::Function, index_vec::AbstractVector{Int}, turns::Int)
     work_vec = PureWork[]
     group_vec = [PureGroup(index_vec, 0)]
 
@@ -175,9 +175,9 @@ function run_simulation!(::AutoRestartCutScheduler, hub_vec::AbstractVector{Hub}
         index_vec = 1:size_hub
         turns = end_day.value
 
-        work_vec = pure_sheduler(eq, index_vec, turns)
+        work_vec = pure_scheduler(eq, index_vec, turns)
 
-        @debug "pure_sheduler, particle: $i, $(size_hub)->$(length(work_vec)), $(size_hub*end_day.value)->" * 
+        @debug "pure_scheduler, particle: $i, $(size_hub)->$(length(work_vec)), $(size_hub*end_day.value)->" * 
                "$(sum(work->work.span_end - work.span_begin+1, work_vec)): $work_vec"
 
         task_vec = map(work_vec) do work

@@ -145,7 +145,7 @@ strap = infer_strap(template, basin, natural, null)
         index_vec = 1:length(dummy_data)
         turns = length(dummy_data[1])
 
-        work_vec = pure_sheduler(eq, index_vec, turns)
+        work_vec = pure_scheduler(eq, index_vec, turns)
 
         #=
         Expected:

@@ -36,12 +36,12 @@ function loading(f::Function, ::Type{Dict{String, Vector{DateDataFrame}}}, hub::
 end
 
 # This method support f which select one column, such as f=ddf->ddf[!, :ROP]
-function loading(f::Function, ::Type{Dict{String, Float64}}, hub::Hub, strap::Strap, row_idx=get_sim_range(hub); selected_type_set=all_route_type_set)
+function loading(f::Function, ::Type{Dict{String, Vector{Float64}}}, hub::Hub, strap::Strap, row_idx=get_sim_range(hub); selected_type_set=all_route_type_set)
     rd = loading(f, Dict{String, Vector{DateDataFrame}}, hub, strap, row_idx; selected_type_set=selected_type_set)
     return Dict(key=>sum.(ddf_vec) for (key, ddf_vec) in rd)
 end
 
 function loading(f::Function, key::String, hub::Hub, strap::Strap, row_idx=get_sim_range(hub); selected_type_set=all_route_type_set)
-    rd = loading(f, Dict{String, Float64}, hub, strap, row_idx; selected_type_set=selected_type_set)
+    rd = loading(f, Dict{String, Vector{Float64}}, hub, strap, row_idx; selected_type_set=selected_type_set)
     return rd[key]
 end

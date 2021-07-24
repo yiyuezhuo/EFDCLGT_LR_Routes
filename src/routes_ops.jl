@@ -21,7 +21,7 @@ end
 
 function open!(hub::Hub, pump::Pump, row_idx=:)
     ddf_vec = _try_get_pump_mux(hub, pump.src, pump.dst)
-    v = pump.value * 3600 # TODO: m3/s -> m3/h
+    v = pump.value * 3600 # TODO: ⊐̸ m3/s -> m3/h
     for ddf in ddf_vec
         ddf[translate_row_idx(hub, row_idx)] .= v
     end
